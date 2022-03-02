@@ -21,22 +21,22 @@ for file in molefrac_glb300x200_*.nc
 do
     echo $file
     day=$(echo $file | cut -d _ -f 3 )
-    # co2
+    #co2
     cdo -O -f nc4c remapcon,${GRIDFILE_100} -expr,'co2=co2_bg+co2_ff+co2_oce+co2_bio+co2_fires' $file tempfile_CO2.nc
-    # the unit should be mol mol-1, but not micromol mol-1
+    #the unit should be mol mol-1, but not micromol mol-1
     ncatted -a units,co2,o,c,"mol mol-1" tempfile_CO2.nc
 
-    # mol mol-1 to ppm
+    #mol mol-1 to ppm
     cdo -O -z zip_6 expr,'co2=co2*1000000' tempfile_CO2.nc ${CO2_PATH}/CO2_${day}.nc
     ncatted -a units,co2,o,c,"ppm" ${CO2_PATH}/CO2_${day}.nc
-    # gph, geopotential_height
-    # geopotential_height_at_level_boundaries
+    #gph, geopotential_height
+    #geopotential_height_at_level_boundaries
     cdo -O -z zip_6 -f nc4c remapcon,${GRIDFILE_100} -selvar,gph $file ${GPH_PATH}/gph_${day}.nc
 done
 
-# fix the first day, and interpolate into hourly
+# monthly mean
 
-YEARSTART=2018
+YEARSTART=2000
 YEAREND=2020
 for YEAR in $(seq $YEARSTART $YEAREND)
 do
@@ -44,18 +44,26 @@ do
     PREFIX=CT_CO2
     cd $CO2_PATH
     
-    cdo -z zip_6 -O mergetime CO2_$((YEAR-1))11*.nc CO2_$((YEAR-1))12*.nc CO2_${YEAR}*.nc tempfile_merge.nc
-    cdo -z zip_6 -O setreftime,${YEAR}-01-01,00:00:00,hours -seldate,$((YEAR-1))-12-01T00:00:00,$((YEAR+1))-01-01T00:00:00 -inttime,$((YEAR-1))-11-30,1:30:00,1hour tempfile_merge.nc conv_${PREFIX}_global_1deg_${YEAR}_$((YEAR-1))12.nc
+    cdo -O mergetime CO2_${YEAR}*.nc tempfile_merge.nc
+    cdo -z zip_6 -O monmean tempfile_merge.nc conv_${PREFIX}_global_1deg_month_${YEAR}.nc
 
     rm tempfile_*.nc
     
     PREFIX=CT_gph
     cd $GPH_PATH
     
-    cdo -z zip_6 -O mergetime gph_$((YEAR-1))11*.nc gph_$((YEAR-1))12*.nc gph_${YEAR}*.nc tempfile_merge.nc
-    cdo -z zip_6 -O setreftime,${YEAR}-01-01,00:00:00,hours -seldate,$((YEAR-1))-12-01T00:00:00,$((YEAR+1))-01-01T00:00:00 -inttime,$((YEAR-1))-11-30,1:30:00,1hour tempfile_merge.nc conv_${PREFIX}_global_1deg_${YEAR}_$((YEAR-1))12.nc
+    cdo -O mergetime gph_${YEAR}*.nc tempfile_merge.nc
+    cdo -z zip_6 -O monmean tempfile_merge.nc conv_${PREFIX}_global_1deg_month_${YEAR}.nc
 done
 
+PREFIX=CT_CO2
+cd $CO2_PATH
+cdo -O mergetime conv_${PREFIX}_global_1deg_month_*.nc GCP2021_${PREFIX}_2000_2020_monthly.nc
+cdo sellevel,1 GCP2021_${PREFIX}_2000_2020_monthly.nc GCP2021_${PREFIX}_2000_2020_monthly_level1.nc
+
+PREFIX=CT_gph
+cd $GPH_PATH
+cdo -O mergetime conv_${PREFIX}_global_1deg_month_*.nc GCP2021_${PREFIX}_2000_2020_monthly.nc
 
 # ----------------------------- test --------------------------------
 # YEAR=2019
